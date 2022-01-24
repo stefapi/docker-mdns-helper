@@ -15,9 +15,10 @@ Git repository of the Docker distribution is on [Github Docker-mDns-Helper](http
 ## TL;DR
 
 It works out of the box, just:
-* Check that Avahi is installed on your system. If not, install it: `apt install avahi-daemon` for a Debian or Ubuntu system
+* Check that Avahi is installed on your system. If not, install it as root: `apt install avahi-daemon` for a Debian or Ubuntu system
 * Change the configuration in your `/etc/avahi/avahi-daemon.conf` file: uncomment or add `enable-dbus=yes`
-* Lauch docker-mdns-helper:
+* Restart avahi. Type as root: `service avahi-daemon restart`
+* Launch docker-mdns-helper:
 ```
 $ docker run -d --name=mdns -v /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket -v /var/run/docker.sock:/var/run/docker.sock stefapi/docker-mdns-helper:latest
 ```

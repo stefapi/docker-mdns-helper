@@ -1,7 +1,9 @@
 ### docker-compose
 
 this docker compose launchs: docker-mdns-helper, docker-dashy-helper, traefik, watchtower, dashy and a sample service: Whoami.
+
 2 domains are created: test.local and whoami.local.
+
 Everything is defined dynamically by labels.
 
 Actions to perform:
