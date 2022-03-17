@@ -10,7 +10,7 @@ these names are usable from MacOS X and Windows too.
 
 This works well with [Traefik](https://traefik.io/) and [Docker-Dashy-Helper](https://hub.docker.com/repository/docker/stefapi/docker-dashy-helper)
 
-Git repository of the Docker distribution is on [Github Docker-mDns-Helper](https://github.com/stefapi/docker-mdns-helper)
+Git repository of the Docker distribution is on [Github Docker-mDNS-Helper](https://github.com/stefapi/docker-mdns-helper)
 
 ## TL;DR
 
@@ -64,7 +64,9 @@ Optional parameter `-l` or `--log` defines the filename to use to write logs to.
 
 Optional parameter `-r` or `--reset` when active, all domains which are no more published with a Treafik label or docker-mdns.domain label are removed from avahi. During the reconfiguration no domain published by docker-mdns-helper will be published causing a temporary domain failure
 
-Optional parameter `-t` or `--ttl` defines ttl of CNAMES publication.
+Optional parameter `-t` or `--ttl` defines ttl of CNAMES publication. Default 60 seconds.
+
+Optional parameter `-w` or `--wait` defines pause between CNAMES scans on Docker. Default 5 seconds.
 
 Optional parameter `-v` or `--verbose` increase the level of verbosity of output.
 
