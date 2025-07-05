@@ -1,137 +1,220 @@
-### docker-compose
+# Docker Compose Setup
 
-this docker compose launchs: docker-mdns-helper, docker-dashy-helper, traefik, watchtower, dashy and a sample service: Whoami.
+This Docker Compose configuration demonstrates a complete setup with:
+- **Docker mDNS Helper**: Automatic mDNS record publishing
+- **Traefik**: Reverse proxy with automatic service discovery
+- **Watchtower**: Automatic container updates
+- **Whoami**: Sample web service for testing
 
-2 domains are created: test.local and whoami.local.
+## What You'll Get
 
-Everything is defined dynamically by labels.
+After setup, you'll have these domains automatically available:
+- `whoami.local` → Sample web service
+- `test.local:8080` → Traefik dashboard
 
-Actions to perform:
-* Create an empty `dashy-conf.yml` file. Type:
-```
-touch dashy-conf.yml
-```
-* Create a `docker-compose.yml` file. Type
-```
+All domains are configured dynamically through container labels - no manual DNS configuration needed!
+
+## Prerequisites
+
+- Docker and Docker Compose installed
+- Avahi daemon running on the host (see main README for setup)
+- Linux host system
+
+## Quick Setup
+
+### 1. Create the Docker Compose file
+
+```bash
 touch docker-compose.yml
 ```
-* edit this file and put into the following text:
+
+### 2. Add the configuration
+
+Copy the following content into your `docker-compose.yml` file:
 ```yaml
 version: "3.8"
 services:
-
-#Docker-mDns-Helper
+  # Docker mDNS Helper - Publishes container domains via Avahi/mDNS
   mdns:
     container_name: mdns
     image: stefapi/docker-mdns-helper:latest
     labels:
-      - "docker-dashy.enable=false"
-      - "traefik.enable=false"
+      - "traefik.enable=false"  # Don't expose through Traefik
     volumes:
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
-      - /var/run/docker.sock:/var/run/docker.sock
-    network_mode: "host"
-    privileged: true
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket  # Avahi communication
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker API access
+    network_mode: "host"  # Required for mDNS broadcasting
+    privileged: true      # Required for D-Bus system access
     restart: unless-stopped
+    command: ["-r"]       # Enable reset mode for clean domain management
 
-#Reverse Proxy
+  # Traefik Reverse Proxy - Routes traffic based on domain names
+  # Note: Works with Traefik v2.x and v3.x (use traefik:v3.0 for latest v3)
   traefik:
     container_name: traefik
-    image: traefik
+    image: traefik:v2.10
     command:
-      - "--api.insecure=true"
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--log.level=DEBUG"
-      - "--entrypoints.web.address=:80"
+      - "--api.insecure=true"                           # Enable dashboard (dev only!)
+      - "--api.dashboard=true"                          # Enable web UI
+      - "--providers.docker=true"                       # Enable Docker provider
+      - "--providers.docker.exposedbydefault=false"     # Require explicit enable
+      - "--log.level=INFO"                              # Logging level
+      - "--entrypoints.web.address=:80"                 # HTTP entrypoint
     labels:
-      - "docker-dashy.enable=false"
-      - "traefik.enable=false"
-      - "docker-dashy.navlink.board.link=Url(`Dashboard`,`http://test.local:8080`)"
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`test.local`)"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+      - "traefik.http.routers.dashboard.service=api@internal"
     ports:
-      - "80:80"
-      - "8080:8080"
+      - "80:80"    # HTTP traffic
+      - "8080:8080"  # Dashboard (alternative access)
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker API (read-only)
     restart: unless-stopped
 
-#Docker-dashy-Helper
-  docker-dashy:
-    container_name: docker-dashy
-    image: stefapi/docker-dashy-helper:latest
-    command:
-      - "-n test.local"
-      - "-l fr"
-      - "-r"
-      - "/app/conf.yml"
-    labels:
-      - "docker-dashy.enable=false"
-      - "traefik.enable=false"
-    volumes:
-      - ./dashy-conf.yml:/app/conf.yml
-      - /var/run/docker.sock:/var/run/docker.sock
-    network_mode: "host"
-    privileged: true
-    restart: unless-stopped
-
-#Watchtower
+  # Watchtower - Automatic container updates
   watchtower:
     container_name: watchtower
-    image: containrrr/watchtower 
+    image: containrrr/watchtower:latest
     command:
-      - "--cleanup"
+      - "--cleanup"           # Remove old images after update
+      - "--interval"          # Check every 24 hours
+      - "86400"
     labels:
-      - "docker-dashy.enable=false"
-      - "traefik.enable=false"
+      - "traefik.enable=false"  # Don't expose through Traefik
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    network_mode: "host"
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker API access
     restart: unless-stopped
 
-#Dashy
-  dashy:
-    container_name: dashy
-    image: lissy93/dashy:latest
-    labels:
-      - "traefik.enable=true"
-      - "docker-dashy.enable=true"
-      - "docker-dashy.site=true"
-      - "traefik.http.routers.test.rule=Host(`test.local`)"
-      - "traefik.http.services.test.loadbalancer.server.port=80"
-      - "traefik.http.routers.test.entrypoints=web"
-      - "docker-dashy.comment=Test Site"
-      - "docker-dashy.footer=Powered by Dashy and docker-dashy-helper"
-      - "docker-dashy.icon=https://dashy.to/img/dashy.png"
-    volumes:
-      - ./dashy-conf.yml:/app/public/conf.yml
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "5000:80"
-    restart: unless-stopped
-
-
-#Basic Web Service
+  # Sample Web Service - Demonstrates the setup
   whoami:
-    image: "containous/whoami"
-    container_name: "simple-service"
+    image: "traefik/whoami:latest"  # Updated image
+    container_name: "whoami-service"
     labels:
-      - "traefik.enable=true"
-      - "docker-dashy.enable=true"
-      - "traefik.http.routers.whoami.rule=Host(`whoami.local`)"
-      - "traefik.http.routers.whoami.entrypoints=web"
-      - "traefik.http.services.whoami.loadbalancer.server.port=80"
-      - "docker-dashy.icon=far fa-question-circle"
-      - "docker-dashy.label=Wo am I"
-      - "docker-dashy.group=tools"
-      - "docker-dashy.grp-icon=fas fa-tools"
+      - "traefik.enable=true"  # Enable Traefik routing
+      - "traefik.http.routers.whoami.rule=Host(`whoami.local`)"  # Domain routing
+      - "traefik.http.routers.whoami.entrypoints=web"            # Use HTTP entrypoint
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"  # Backend port
     ports:
-      - "6000:80"
+      - "6000:80"  # Direct access (optional)
     restart: unless-stopped
 ```
-* Save the file and Start the composition:
-```
+
+### 3. Start the services
+
+```bash
+# Start all services in the background
 docker-compose up -d
+
+# Check that all services are running
+docker-compose ps
 ```
-* Point your browser to http://test.local or http://whoami.local or http://test.local:5000 or http://test.local:6000 or http://test.local:8080
-* Enjoy !
+
+### 4. Test the setup
+
+Once all containers are running, test the mDNS domains:
+
+```bash
+# Test domain resolution (if avahi-utils is installed)
+avahi-resolve -n whoami.local
+avahi-resolve -n test.local
+
+# Or simply open in your browser:
+```
+
+**Available URLs:**
+- 🌐 **http://whoami.local** - Sample web service (via Traefik)
+- 🌐 **http://whoami.local:6000** - Sample web service (direct access)
+- 📊 **http://test.local** - Traefik dashboard (via mDNS)
+- 📊 **http://localhost:8080** - Traefik dashboard (direct access)
+
+## Service Explanations
+
+### Docker mDNS Helper
+- **Purpose**: Automatically publishes mDNS records for containers with Traefik labels
+- **How it works**: Monitors Docker events and creates `*.local` domains pointing to localhost
+- **Configuration**: Uses the `-r` flag to clean up stale domains
+
+### Traefik
+- **Purpose**: Reverse proxy that routes HTTP traffic based on domain names
+- **Configuration**: Automatically discovers services via Docker labels
+- **Version Support**: Compatible with Traefik v2.x and v3.x (v3 maintains backward compatibility)
+- **Dashboard**: Accessible at `test.local` (thanks to mDNS Helper!)
+
+### Watchtower
+- **Purpose**: Automatically updates containers when new images are available
+- **Schedule**: Checks for updates every 24 hours
+- **Cleanup**: Removes old images after successful updates
+
+### Whoami Service
+- **Purpose**: Simple web service that displays request information
+- **Access**: Available via `whoami.local` domain and direct port `6000`
+- **Use case**: Perfect for testing the mDNS + Traefik integration
+
+## Troubleshooting
+
+### Domains not resolving
+```bash
+# Check if mDNS helper is running and healthy
+docker logs mdns
+
+# Verify Avahi is working on the host
+sudo systemctl status avahi-daemon
+
+# Check if domains are being published
+avahi-browse -at | grep whoami
+```
+
+### Traefik not routing traffic
+```bash
+# Check Traefik logs
+docker logs traefik
+
+# Verify container labels
+docker inspect whoami-service | grep -A 10 Labels
+
+# Check Traefik dashboard for registered services
+# Visit: http://test.local or http://localhost:8080
+```
+
+### Services not starting
+```bash
+# Check service status
+docker-compose ps
+
+# View logs for specific service
+docker-compose logs mdns
+docker-compose logs traefik
+
+# Restart specific service
+docker-compose restart mdns
+```
+
+## Adding Your Own Services
+
+To add your own service with automatic mDNS publishing:
+
+```yaml
+  myapp:
+    image: "your-app:latest"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.myapp.rule=Host(`myapp.local`)"
+      - "traefik.http.routers.myapp.entrypoints=web"
+      - "traefik.http.services.myapp.loadbalancer.server.port=8080"
+    restart: unless-stopped
+```
+
+The mDNS Helper will automatically create `myapp.local` → `localhost` mapping!
+
+## Cleanup
+
+To stop and remove all services:
+
+```bash
+# Stop services
+docker-compose down
+
+# Remove volumes and networks (optional)
+docker-compose down -v --remove-orphans
+```

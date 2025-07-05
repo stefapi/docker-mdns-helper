@@ -51,17 +51,21 @@ def daemonize():
     os.umask(0o022)
 
     # Redirect the standard file descriptors to "/dev/null"...
-    f = open(os.devnull, "r")
-    os.dup2(f.fileno(), sys.stdin.fileno())
-    assert sys.stdin.fileno() == 0
+    try:
+        # Redirect stdin
+        with open(os.devnull, "r") as f:
+            os.dup2(f.fileno(), sys.stdin.fileno())
 
-    f = open(os.devnull, "r")
-    os.dup2(f.fileno(), sys.stdout.fileno())
-    assert sys.stdout.fileno() == 1
+        # Redirect stdout
+        with open(os.devnull, "w") as f:
+            os.dup2(f.fileno(), sys.stdout.fileno())
 
-    f = open(os.devnull, "r")
-    os.dup2(f.fileno(), sys.stderr.fileno())
-    assert sys.stderr.fileno() == 2
+        # Redirect stderr
+        with open(os.devnull, "w") as f:
+            os.dup2(f.fileno(), sys.stderr.fileno())
+
+    except (OSError, IOError) as e:
+        raise Exception("Failed to redirect standard file descriptors: %s [%d]" % (e.strerror, e.errno))
 
 
 # vim: set expandtab ts=4 sw=4:

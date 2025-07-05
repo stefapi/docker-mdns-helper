@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  docker-mdns-helper:
+    build:
+      context: .
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION:-3.9}
+    container_name: docker-mdns-helper
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    volumes:
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - MDNS_TTL=${MDNS_TTL:-60}
+      - MDNS_WAIT=${MDNS_WAIT:-5}
+      - MDNS_VERBOSE=${MDNS_VERBOSE:-false}
+      - MDNS_FORCE=${MDNS_FORCE:-false}
+      - MDNS_RESET=${MDNS_RESET:-true}
+      - MDNS_DISABLE=${MDNS_DISABLE:-false}
+    command: >
+      sh -c "python start.py
+      $${MDNS_TTL:+-t $$MDNS_TTL}
+      $${MDNS_WAIT:+-w $$MDNS_WAIT}
+      $${MDNS_VERBOSE:+--verbose}
+      $${MDNS_FORCE:+--force}
+      $${MDNS_RESET:+--reset}
+      $${MDNS_DISABLE:+--disable}
+      $${MDNS_DOMAINS}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import dbus; dbus.SystemBus().get_object('org.freedesktop.Avahi', '/').GetVersionString()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=false"
+      - "docker-dashy.enable=false"
